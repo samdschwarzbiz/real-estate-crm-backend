@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
-const { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail } = require('./services/reminders');
+const { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail, checkAppointments } = require('./services/reminders');
 
 const dashboardRoutes = require('./routes/dashboard');
 const leadsRoutes = require('./routes/leads');
@@ -11,6 +11,8 @@ const activitiesRoutes = require('./routes/activities');
 const transactionsRoutes = require('./routes/transactions');
 const webhookRoutes = require('./routes/webhook');
 const propertiesRoutes = require('./routes/properties');
+const appointmentsRoutes = require('./routes/appointments');
+const googleAuthRoutes = require('./routes/google-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -46,6 +48,8 @@ app.use('/api/activities', activitiesRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/properties', propertiesRoutes);
+app.use('/api/appointments', appointmentsRoutes);
+app.use('/api/google', googleAuthRoutes);
 
 // Manual trigger endpoint for reminders
 app.post('/api/reminders/send-now', async (req, res) => {
@@ -86,6 +90,7 @@ cron.schedule('0 15 * * *', async () => {
   await checkFollowUps();
   await checkBirthdays();
   await checkAnniversaries();
+  await checkAppointments();
 });
 
 app.listen(PORT, () => {

@@ -194,4 +194,75 @@ async function sendTestEmail() {
   });
 }
 
-module.exports = { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail };
+async function checkAppointments() {
+  try {
+    const result = await pool.query(`
+      SELECT a.*, c.first_name, c.last_name, c.phone
+      FROM appointments a
+      LEFT JOIN contacts c ON c.id = a.contact_id
+      WHERE a.scheduled_at::date = CURRENT_DATE
+        AND a.status = 'scheduled'
+        AND a.reminder_sent = false
+    `);
+
+    if (result.rows.length === 0) return;
+
+    const typeLabels = {
+      showing: '🏠 Showing', walkthrough: '🚪 Final Walk-Through',
+      inspection: '🔍 Inspection', closing: '🎉 Closing',
+      open_house: '🏡 Open House', meeting: '📋 Meeting',
+    };
+
+    const rows = result.rows.map(r => `
+      <tr>
+        <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">
+          <strong style="color:#1a2b4a;">${typeLabels[r.type] || r.type}</strong>
+        </td>
+        <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;color:#666;">
+          ${r.first_name ? r.first_name + ' ' + r.last_name : '—'}
+        </td>
+        <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;color:#666;">
+          ${r.property_address || r.title || '—'}
+        </td>
+        <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;color:#666;">
+          ${new Date(r.scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+        </td>
+      </tr>
+    `).join('');
+
+    await sendReminderEmail({
+      subject: `📅 ${result.rows.length} Appointment${result.rows.length > 1 ? 's' : ''} Today`,
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+          <div style="background:#1a2b4a;color:white;border-radius:12px;padding:24px;margin-bottom:20px;">
+            <h1 style="margin:0;font-size:24px;">📅 Today's Appointments</h1>
+            <p style="margin:8px 0 0;opacity:0.8;">Dolan Real Estate CRM</p>
+          </div>
+          <div style="background:#f8f9fa;border-radius:12px;padding:24px;">
+            <p style="color:#666;margin-top:0;">You have <strong>${result.rows.length}</strong> appointment${result.rows.length > 1 ? 's' : ''} today:</p>
+            <table style="width:100%;border-collapse:collapse;background:white;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0;">
+              <thead>
+                <tr style="background:#f5f5f5;">
+                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#888;text-transform:uppercase;">Type</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#888;text-transform:uppercase;">Client</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#888;text-transform:uppercase;">Address</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:12px;color:#888;text-transform:uppercase;">Time</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <a href="https://crm.samschwarzhomes.com/schedule" style="display:inline-block;margin-top:20px;background:#c9a84c;color:#1a2b4a;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View Schedule</a>
+          </div>
+        </div>
+      `,
+    });
+
+    // Mark reminders as sent
+    const ids = result.rows.map(r => r.id);
+    await pool.query(`UPDATE appointments SET reminder_sent = true WHERE id = ANY($1)`, [ids]);
+  } catch (err) {
+    console.error('Appointment reminder error:', err.message);
+  }
+}
+
+module.exports = { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail, checkAppointments };
