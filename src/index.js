@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
-const { checkBirthdays, checkAnniversaries, checkFollowUps } = require('./services/reminders');
+const { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail } = require('./services/reminders');
 
 const dashboardRoutes = require('./routes/dashboard');
 const leadsRoutes = require('./routes/leads');
@@ -53,6 +53,16 @@ app.post('/api/reminders/send-now', async (req, res) => {
     await checkBirthdays();
     await checkAnniversaries();
     res.json({ success: true, message: 'Reminder emails sent' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Test email endpoint
+app.post('/api/reminders/test', async (req, res) => {
+  try {
+    await sendTestEmail();
+    res.json({ success: true, message: 'Test email sent' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

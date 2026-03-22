@@ -169,4 +169,29 @@ async function checkFollowUps() {
   }
 }
 
-module.exports = { checkBirthdays, checkAnniversaries, checkFollowUps };
+// ── Send a test email to confirm delivery ─────────────────
+async function sendTestEmail() {
+  await sendReminderEmail({
+    subject: `✅ Dolan Real Estate CRM — Email Reminders Working!`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+        <div style="background: #1a2b4a; color: white; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+          <h1 style="margin: 0; font-size: 24px;">✅ Email Reminders Active</h1>
+          <p style="margin: 8px 0 0; opacity: 0.8;">Dolan Real Estate CRM</p>
+        </div>
+        <div style="background: #f8f9fa; border-radius: 12px; padding: 24px;">
+          <h2 style="color: #1a2b4a; margin-top: 0;">Your CRM email reminders are working!</h2>
+          <p style="color: #666;">Every morning at 8am you'll receive reminders for:</p>
+          <ul style="color: #666;">
+            <li>📅 Follow-ups due today</li>
+            <li>🎂 Birthdays coming up in 3 days</li>
+            <li>🏠 Closing anniversaries coming up in 3 days</li>
+          </ul>
+          <a href="https://frontend-tawny-rho-40.vercel.app" style="display: inline-block; margin-top: 20px; background: #c9a84c; color: #1a2b4a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Open CRM</a>
+        </div>
+      </div>
+    `,
+  });
+}
+
+module.exports = { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail };
