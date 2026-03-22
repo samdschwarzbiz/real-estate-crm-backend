@@ -21,6 +21,7 @@ app.use(cors({
       'http://localhost:5173',
       'http://localhost:4173',
       'https://frontend-tawny-rho-40.vercel.app',
+      'https://crm.samschwarzhomes.com',
     ];
     if (!origin || allowed.includes(origin) || (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL)) {
       callback(null, true);
