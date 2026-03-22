@@ -13,7 +13,18 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://localhost:4173'],
+  origin: function (origin, callback) {
+    const allowed = [
+      'http://localhost:5173',
+      'http://localhost:4173',
+      'https://frontend-tawny-rho-40.vercel.app',
+    ];
+    if (!origin || allowed.includes(origin) || (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json());
