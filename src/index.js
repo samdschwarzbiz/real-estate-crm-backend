@@ -8,6 +8,7 @@ const contactsRoutes = require('./routes/contacts');
 const activitiesRoutes = require('./routes/activities');
 const transactionsRoutes = require('./routes/transactions');
 const webhookRoutes = require('./routes/webhook');
+const propertiesRoutes = require('./routes/properties');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -41,6 +42,7 @@ app.use('/api/contacts', contactsRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/properties', propertiesRoutes);
 
 // 404
 app.use((req, res) => {
