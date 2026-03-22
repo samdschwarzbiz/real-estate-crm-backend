@@ -46,6 +46,18 @@ app.use('/api/transactions', transactionsRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/properties', propertiesRoutes);
 
+// Manual trigger endpoint for reminders
+app.post('/api/reminders/send-now', async (req, res) => {
+  try {
+    await checkFollowUps();
+    await checkBirthdays();
+    await checkAnniversaries();
+    res.json({ success: true, message: 'Reminder emails sent' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
@@ -63,18 +75,6 @@ cron.schedule('0 15 * * *', async () => {
   await checkFollowUps();
   await checkBirthdays();
   await checkAnniversaries();
-});
-
-// Manual trigger endpoint (for testing)
-app.post('/api/reminders/send-now', async (req, res) => {
-  try {
-    await checkFollowUps();
-    await checkBirthdays();
-    await checkAnniversaries();
-    res.json({ success: true, message: 'Reminder emails sent' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 app.listen(PORT, () => {
