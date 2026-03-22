@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
+const { checkBirthdays, checkAnniversaries, checkFollowUps } = require('./services/reminders');
 
 const dashboardRoutes = require('./routes/dashboard');
 const leadsRoutes = require('./routes/leads');
@@ -53,6 +55,26 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error', message: err.message });
+});
+
+// ── Daily reminder cron (8:00 AM Arizona time = 15:00 UTC) ──
+cron.schedule('0 15 * * *', async () => {
+  console.log('🔔 Running daily reminders...');
+  await checkFollowUps();
+  await checkBirthdays();
+  await checkAnniversaries();
+});
+
+// Manual trigger endpoint (for testing)
+app.post('/api/reminders/send-now', async (req, res) => {
+  try {
+    await checkFollowUps();
+    await checkBirthdays();
+    await checkAnniversaries();
+    res.json({ success: true, message: 'Reminder emails sent' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
