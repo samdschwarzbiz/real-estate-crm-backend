@@ -17,6 +17,15 @@ router.get('/auth-url', (req, res) => {
   res.json({ url });
 });
 
+// GET /api/google/connect  — direct redirect (no JS async needed)
+router.get('/connect', (req, res) => {
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    return res.status(400).send('Google OAuth not configured');
+  }
+  const url = getAuthUrl();
+  res.redirect(url);
+});
+
 // GET /api/google/callback
 router.get('/callback', async (req, res) => {
   try {
