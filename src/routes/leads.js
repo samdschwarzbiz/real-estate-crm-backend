@@ -207,6 +207,8 @@ router.patch('/:id', async (req, res) => {
       // Past client fields
       'closing_date','closing_address','closing_price','is_past_client','client_type',
       'relationship_score','tags',
+      // Commission fields
+      'sale_price','commission_rate','agent_split','tax_rate','gross_commission','agent_gross','tax_amount','net_income',
     ];
     const updates = Object.keys(fields).filter(k => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
