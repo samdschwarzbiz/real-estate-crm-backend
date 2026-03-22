@@ -237,6 +237,67 @@ router.get('/upcoming-reminders', async (req, res) => {
   }
 });
 
+// GET /api/dashboard/yearly-stats
+router.get('/yearly-stats', async (req, res) => {
+  try {
+    const lastYear = new Date().getFullYear() - 1;
+    const thisYear = new Date().getFullYear();
+
+    const [lastYearStats, thisYearStats, lastYearDeals] = await Promise.all([
+      db.query(`
+        SELECT
+          COALESCE(SUM(gci), 0) AS total_gci,
+          COALESCE(SUM(sale_price), 0) AS total_volume,
+          COUNT(*) AS total_deals,
+          COALESCE(AVG(sale_price), 0) AS avg_sale_price
+        FROM transactions
+        WHERE status = 'closed'
+          AND EXTRACT(YEAR FROM close_date) = $1
+      `, [lastYear]),
+      db.query(`
+        SELECT
+          COALESCE(SUM(gci), 0) AS total_gci,
+          COALESCE(SUM(sale_price), 0) AS total_volume,
+          COUNT(*) AS total_deals
+        FROM transactions
+        WHERE status = 'closed'
+          AND EXTRACT(YEAR FROM close_date) = $1
+      `, [thisYear]),
+      db.query(`
+        SELECT
+          t.*,
+          c.first_name, c.last_name
+        FROM transactions t
+        LEFT JOIN leads l ON l.id = t.lead_id
+        LEFT JOIN contacts c ON c.id = l.contact_id
+        WHERE t.status = 'closed'
+          AND EXTRACT(YEAR FROM t.close_date) = $1
+        ORDER BY t.close_date DESC
+      `, [lastYear]),
+    ]);
+
+    res.json({
+      lastYear: {
+        year: lastYear,
+        gci: parseFloat(lastYearStats.rows[0].total_gci),
+        volume: parseFloat(lastYearStats.rows[0].total_volume),
+        deals: parseInt(lastYearStats.rows[0].total_deals),
+        avgSalePrice: parseFloat(lastYearStats.rows[0].avg_sale_price),
+        deals_list: lastYearDeals.rows,
+      },
+      thisYear: {
+        year: thisYear,
+        gci: parseFloat(thisYearStats.rows[0].total_gci),
+        volume: parseFloat(thisYearStats.rows[0].total_volume),
+        deals: parseInt(thisYearStats.rows[0].total_deals),
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 function statusLabel(status) {
   const labels = {
     new: 'New',
