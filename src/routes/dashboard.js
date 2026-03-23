@@ -330,4 +330,102 @@ function statusLabel(status) {
   return labels[status] || status;
 }
 
+// GET /api/dashboard/hot-leads  — leads needing attention
+router.get('/hot-leads', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        l.id, l.status, l.next_followup_at, l.last_contact_at,
+        c.first_name, c.last_name, c.phone, c.email
+      FROM leads l
+      JOIN contacts c ON c.id = l.contact_id
+      WHERE l.status NOT IN ('closed_won', 'closed_lost')
+        AND (
+          (l.next_followup_at IS NOT NULL AND l.next_followup_at < NOW())
+          OR (l.last_contact_at IS NULL)
+          OR (l.last_contact_at < NOW() - INTERVAL '14 days')
+        )
+      ORDER BY
+        CASE WHEN l.next_followup_at IS NOT NULL AND l.next_followup_at < NOW() THEN 0
+             WHEN l.last_contact_at IS NULL THEN 1
+             ELSE 2 END ASC,
+        l.next_followup_at ASC NULLS LAST
+      LIMIT 10
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/dashboard/source-stats  — lead counts by source
+router.get('/source-stats', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        COALESCE(c.source, 'unknown') AS source,
+        COUNT(*) AS count
+      FROM leads l
+      JOIN contacts c ON c.id = l.contact_id
+      WHERE l.status NOT IN ('closed_lost')
+      GROUP BY c.source
+      ORDER BY count DESC
+    `);
+    res.json(result.rows.map(r => ({
+      source: r.source,
+      count: parseInt(r.count),
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/dashboard/monthly-income?year=2025&month=3
+router.get('/monthly-income', async (req, res) => {
+  try {
+    const year  = parseInt(req.query.year)  || new Date().getFullYear();
+    const month = parseInt(req.query.month) || new Date().getMonth() + 1;
+
+    const [summary, deals] = await Promise.all([
+      db.query(`
+        SELECT
+          COUNT(*) AS total_deals,
+          COALESCE(SUM(closing_price), 0) AS total_volume,
+          COALESCE(SUM(gross_commission), 0) AS total_gci,
+          COALESCE(SUM(net_income), 0) AS total_net,
+          COALESCE(AVG(closing_price), 0) AS avg_price
+        FROM leads
+        WHERE status = 'closed_won'
+          AND EXTRACT(YEAR  FROM closing_date) = $1
+          AND EXTRACT(MONTH FROM closing_date) = $2
+      `, [year, month]),
+      db.query(`
+        SELECT l.id, l.closing_date, l.closing_address, l.closing_price,
+               l.gross_commission, l.net_income, l.commission_rate, l.agent_split,
+               c.first_name, c.last_name
+        FROM leads l
+        JOIN contacts c ON c.id = l.contact_id
+        WHERE l.status = 'closed_won'
+          AND EXTRACT(YEAR  FROM l.closing_date) = $1
+          AND EXTRACT(MONTH FROM l.closing_date) = $2
+        ORDER BY l.closing_date DESC
+      `, [year, month]),
+    ]);
+
+    const s = summary.rows[0];
+    res.json({
+      year, month,
+      totalDeals:  parseInt(s.total_deals),
+      totalVolume: parseFloat(s.total_volume),
+      totalGCI:    parseFloat(s.total_gci),
+      totalNet:    parseFloat(s.total_net),
+      avgPrice:    parseFloat(s.avg_price),
+      deals:       deals.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -40,4 +40,59 @@ router.get('/callback', async (req, res) => {
   }
 });
 
+// GET /api/google/birthdays  — upcoming birthdays from Google Calendar
+router.get('/birthdays', async (req, res) => {
+  try {
+    const { getAuthorizedClient } = require('../services/google-calendar');
+    const auth = await getAuthorizedClient();
+    const { google } = require('googleapis');
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    // List all calendars to find the Birthdays calendar
+    const calList = await calendar.calendarList.list();
+    const birthdayCal = calList.data.items.find(c =>
+      c.summary && (
+        c.summary.toLowerCase().includes('birthday') ||
+        c.id.includes('birthday') ||
+        c.id.includes('contacts')
+      )
+    );
+
+    if (!birthdayCal) {
+      return res.json([]);
+    }
+
+    const now = new Date();
+    const in60days = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+
+    const events = await calendar.events.list({
+      calendarId: birthdayCal.id,
+      timeMin: now.toISOString(),
+      timeMax: in60days.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 20,
+    });
+
+    const results = (events.data.items || []).map(e => {
+      const dateStr = e.start.date || e.start.dateTime?.slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      const days = Math.ceil((new Date(dateStr) - new Date(today)) / 86400000);
+      return {
+        id: e.id,
+        name: e.summary?.replace(/['']s birthday/i, '').replace(/birthday/i, '').trim() || e.summary,
+        date: dateStr,
+        days_until: days,
+        source: 'google_calendar',
+      };
+    });
+
+    res.json(results);
+  } catch (err) {
+    // If not connected or error, return empty array gracefully
+    console.error('[google/birthdays]', err.message);
+    res.json([]);
+  }
+});
+
 module.exports = router;
