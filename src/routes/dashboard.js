@@ -13,6 +13,7 @@ router.get('/stats', async (req, res) => {
       gciThisYear,
       pipelineByStatus,
       closedThisMonth,
+      underContract,
     ] = await Promise.all([
       db.query(`
         SELECT COUNT(*) FROM leads
@@ -44,20 +45,31 @@ router.get('/stats', async (req, res) => {
         WHERE status NOT IN ('closed_lost')
         GROUP BY status
         ORDER BY CASE status
-          WHEN 'new' THEN 1
-          WHEN 'contacted' THEN 2
-          WHEN 'nurturing' THEN 3
-          WHEN 'showing' THEN 4
-          WHEN 'offer' THEN 5
-          WHEN 'under_contract' THEN 6
-          WHEN 'closed_won' THEN 7
-          ELSE 8
+          WHEN 'needs_time' THEN 1
+          WHEN 'active' THEN 2
+          WHEN 'super_active' THEN 3
+          WHEN 'under_contract' THEN 4
+          WHEN 'closed_won' THEN 5
+          ELSE 6
         END
       `),
       db.query(`
         SELECT COUNT(*) FROM transactions
         WHERE status = 'closed'
           AND close_date >= DATE_TRUNC('month', CURRENT_DATE)
+      `),
+      db.query(`
+        SELECT
+          COUNT(*) AS count,
+          COALESCE(SUM(gross_commission), 0) AS total_gci,
+          COALESCE(SUM(sale_price), 0) AS total_volume,
+          COALESCE(SUM(
+            CASE WHEN gross_commission IS NULL AND sale_price IS NOT NULL AND commission_rate IS NOT NULL
+            THEN sale_price * (commission_rate / 100)
+            ELSE gross_commission END
+          ), 0) AS projected_gci
+        FROM leads
+        WHERE status = 'under_contract'
       `),
     ]);
 
@@ -73,6 +85,11 @@ router.get('/stats', async (req, res) => {
         count: parseInt(r.count),
         label: statusLabel(r.status),
       })),
+      underContract: {
+        count: parseInt(underContract.rows[0].count),
+        totalVolume: parseFloat(underContract.rows[0].total_volume),
+        projectedGci: parseFloat(underContract.rows[0].projected_gci),
+      },
     });
   } catch (err) {
     console.error(err);
@@ -300,11 +317,9 @@ router.get('/yearly-stats', async (req, res) => {
 
 function statusLabel(status) {
   const labels = {
-    new: 'New',
-    contacted: 'Contacted',
-    nurturing: 'Nurturing',
-    showing: 'Showing',
-    offer: 'Offer',
+    needs_time: 'Needs Time',
+    active: 'Active',
+    super_active: 'Super Active',
     under_contract: 'Under Contract',
     closed_won: 'Closed',
     closed_lost: 'Lost',
