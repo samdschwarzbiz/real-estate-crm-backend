@@ -61,13 +61,16 @@ router.get('/stats', async (req, res) => {
       db.query(`
         SELECT
           COUNT(*) AS count,
-          COALESCE(SUM(gross_commission), 0) AS total_gci,
           COALESCE(SUM(sale_price), 0) AS total_volume,
+          COALESCE(SUM(net_income), 0) AS total_net,
           COALESCE(SUM(
-            CASE WHEN gross_commission IS NULL AND sale_price IS NOT NULL AND commission_rate IS NOT NULL
-            THEN sale_price * (commission_rate / 100)
-            ELSE gross_commission END
-          ), 0) AS projected_gci
+            CASE
+              WHEN net_income IS NOT NULL THEN net_income
+              WHEN sale_price IS NOT NULL AND commission_rate IS NOT NULL AND agent_split IS NOT NULL AND tax_rate IS NOT NULL
+              THEN sale_price * (commission_rate/100) * (agent_split/100) * (1 - tax_rate/100)
+              ELSE 0
+            END
+          ), 0) AS projected_net
         FROM leads
         WHERE status = 'under_contract'
       `),
@@ -88,7 +91,7 @@ router.get('/stats', async (req, res) => {
       underContract: {
         count: parseInt(underContract.rows[0].count),
         totalVolume: parseFloat(underContract.rows[0].total_volume),
-        projectedGci: parseFloat(underContract.rows[0].projected_gci),
+        projectedNet: parseFloat(underContract.rows[0].projected_net),
       },
     });
   } catch (err) {
