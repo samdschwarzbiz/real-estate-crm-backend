@@ -359,16 +359,21 @@ router.get('/hot-leads', async (req, res) => {
   }
 });
 
-// GET /api/dashboard/source-stats  — lead counts by source
+// GET /api/dashboard/source-stats?status=closed_won  — lead counts by source (optional status filter)
 router.get('/source-stats', async (req, res) => {
   try {
+    const { status } = req.query;
+    const whereClause = status
+      ? `WHERE l.status = '${status.replace(/'/g,"''")}'`
+      : `WHERE l.status NOT IN ('closed_lost')`;
+
     const result = await db.query(`
       SELECT
         COALESCE(c.source, 'unknown') AS source,
         COUNT(*) AS count
       FROM leads l
       JOIN contacts c ON c.id = l.contact_id
-      WHERE l.status NOT IN ('closed_lost')
+      ${whereClause}
       GROUP BY c.source
       ORDER BY count DESC
     `);
