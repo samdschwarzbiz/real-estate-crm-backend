@@ -15,6 +15,7 @@ const appointmentsRoutes = require('./routes/appointments');
 const googleAuthRoutes = require('./routes/google-auth');
 const searchRoutes = require('./routes/search');
 const tasksRoutes = require('./routes/tasks');
+const textTemplatesRoutes = require('./routes/text-templates');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -54,6 +55,7 @@ app.use('/api/appointments', appointmentsRoutes);
 app.use('/api/google', googleAuthRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/tasks', tasksRoutes);
+app.use('/api/text-templates', textTemplatesRoutes);
 
 // Manual trigger endpoint for reminders
 app.post('/api/reminders/send-now', async (req, res) => {
