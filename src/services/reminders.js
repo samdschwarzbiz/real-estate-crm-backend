@@ -265,4 +265,51 @@ async function checkAppointments() {
   }
 }
 
-module.exports = { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail, checkAppointments };
+// ── Check upcoming closings (3 days out + 1 day out) ──────
+async function checkUpcomingClosings() {
+  try {
+    for (const daysAhead of [3, 1]) {
+      const result = await pool.query(`
+        SELECT c.first_name, c.last_name, l.id AS lead_id,
+               l.closing_date, l.closing_address, l.closing_price, l.net_income
+        FROM leads l
+        JOIN contacts c ON c.id = l.contact_id
+        WHERE l.status = 'under_contract'
+          AND l.closing_date IS NOT NULL
+          AND l.closing_date::date = CURRENT_DATE + INTERVAL '${daysAhead} days'
+      `);
+
+      if (result.rows.length === 0) continue;
+
+      for (const row of result.rows) {
+        const dayLabel = daysAhead === 1 ? 'TOMORROW' : 'in 3 days';
+        const closingDateStr = new Date(row.closing_date).toLocaleDateString('en-US', {
+          weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+        });
+        await sendReminderEmail({
+          subject: `🎉 Closing ${dayLabel}: ${row.first_name} ${row.last_name}${row.closing_address ? ' — ' + row.closing_address : ''}`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+              <div style="background: #1a2b4a; color: white; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+                <h1 style="margin: 0; font-size: 24px;">🎉 Closing ${dayLabel.toUpperCase()}!</h1>
+                <p style="margin: 8px 0 0; opacity: 0.8;">Dolan Real Estate CRM</p>
+              </div>
+              <div style="background: #f8f9fa; border-radius: 12px; padding: 24px;">
+                <h2 style="color: #1a2b4a; margin-top: 0;">${row.first_name} ${row.last_name}</h2>
+                ${row.closing_address ? `<p style="color: #444; font-size: 16px;">📍 ${row.closing_address}</p>` : ''}
+                <p style="color: #666;">📅 Closing Date: <strong>${closingDateStr}</strong></p>
+                ${row.closing_price ? `<p style="color: #666;">💰 Sale Price: <strong>$${Number(row.closing_price).toLocaleString()}</strong></p>` : ''}
+                ${row.net_income ? `<p style="color: #16a34a; font-weight: 600;">✅ Net Income: $${Number(row.net_income).toLocaleString()}</p>` : ''}
+                <a href="https://crm.dolanre.com/leads/${row.lead_id}" style="display: inline-block; margin-top: 20px; background: #c9a84c; color: #1a2b4a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">View Deal →</a>
+              </div>
+            </div>
+          `,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Upcoming closings check error:', err.message);
+  }
+}
+
+module.exports = { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail, checkAppointments, checkUpcomingClosings };

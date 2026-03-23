@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
-const { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail, checkAppointments } = require('./services/reminders');
+const { checkBirthdays, checkAnniversaries, checkFollowUps, sendTestEmail, checkAppointments, checkUpcomingClosings } = require('./services/reminders');
 
 const dashboardRoutes = require('./routes/dashboard');
 const leadsRoutes = require('./routes/leads');
@@ -95,6 +95,7 @@ cron.schedule('0 15 * * *', async () => {
   await checkBirthdays();
   await checkAnniversaries();
   await checkAppointments();
+  await checkUpcomingClosings();
 });
 
 app.listen(PORT, () => {

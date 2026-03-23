@@ -235,7 +235,33 @@ router.get('/upcoming-reminders', async (req, res) => {
       ORDER BY days_until ASC
     `);
 
+    // Upcoming closings for under_contract leads (next 30 days)
+    const upcomingClosings = await db.query(`
+      SELECT
+        l.id AS lead_id,
+        c.id AS contact_id,
+        c.first_name,
+        c.last_name,
+        l.closing_date,
+        l.closing_address,
+        l.closing_price,
+        'upcoming_closing' AS type,
+        (l.closing_date::date - CURRENT_DATE) AS days_until
+      FROM leads l
+      JOIN contacts c ON c.id = l.contact_id
+      WHERE l.status = 'under_contract'
+        AND l.closing_date IS NOT NULL
+        AND l.closing_date::date >= CURRENT_DATE
+        AND l.closing_date::date <= CURRENT_DATE + INTERVAL '30 days'
+      ORDER BY l.closing_date ASC
+    `);
+
     const all = [
+      ...upcomingClosings.rows.map(r => ({
+        ...r,
+        days_until: parseInt(r.days_until),
+        date: r.closing_date,
+      })),
       ...anniversaries.rows.map(r => ({
         ...r,
         days_until: parseInt(r.days_until),
