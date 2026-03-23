@@ -257,61 +257,95 @@ router.get('/upcoming-reminders', async (req, res) => {
   }
 });
 
-// GET /api/dashboard/yearly-stats
+// GET /api/dashboard/yearly-stats?year=2025
 router.get('/yearly-stats', async (req, res) => {
   try {
-    const lastYear = new Date().getFullYear() - 1;
     const thisYear = new Date().getFullYear();
+    const selectedYear = parseInt(req.query.year) || thisYear - 1;
 
-    const [lastYearStats, thisYearStats, lastYearDeals] = await Promise.all([
+    const [selectedStats, selectedDeals, thisYearStats] = await Promise.all([
       db.query(`
         SELECT
-          COALESCE(SUM(gci), 0) AS total_gci,
-          COALESCE(SUM(sale_price), 0) AS total_volume,
+          COALESCE(SUM(closing_price), 0) AS total_volume,
+          COALESCE(SUM(gross_commission), 0) AS total_gci,
+          COALESCE(SUM(net_income), 0) AS total_net,
           COUNT(*) AS total_deals,
-          COALESCE(AVG(sale_price), 0) AS avg_sale_price
-        FROM transactions
-        WHERE status = 'closed'
-          AND EXTRACT(YEAR FROM close_date) = $1
-      `, [lastYear]),
+          COALESCE(AVG(closing_price), 0) AS avg_sale_price
+        FROM leads
+        WHERE status = 'closed_won'
+          AND EXTRACT(YEAR FROM closing_date) = $1
+      `, [selectedYear]),
+      db.query(`
+        SELECT l.id, l.closing_date, l.closing_address, l.closing_price,
+               l.gross_commission, l.net_income, l.commission_rate, l.agent_split,
+               c.first_name, c.last_name
+        FROM leads l
+        JOIN contacts c ON c.id = l.contact_id
+        WHERE l.status = 'closed_won'
+          AND EXTRACT(YEAR FROM l.closing_date) = $1
+        ORDER BY l.closing_date DESC
+      `, [selectedYear]),
       db.query(`
         SELECT
-          COALESCE(SUM(gci), 0) AS total_gci,
-          COALESCE(SUM(sale_price), 0) AS total_volume,
+          COALESCE(SUM(closing_price), 0) AS total_volume,
+          COALESCE(SUM(gross_commission), 0) AS total_gci,
           COUNT(*) AS total_deals
-        FROM transactions
-        WHERE status = 'closed'
-          AND EXTRACT(YEAR FROM close_date) = $1
+        FROM leads
+        WHERE status = 'closed_won'
+          AND EXTRACT(YEAR FROM closing_date) = $1
       `, [thisYear]),
-      db.query(`
-        SELECT
-          t.*,
-          c.first_name, c.last_name
-        FROM transactions t
-        LEFT JOIN leads l ON l.id = t.lead_id
-        LEFT JOIN contacts c ON c.id = l.contact_id
-        WHERE t.status = 'closed'
-          AND EXTRACT(YEAR FROM t.close_date) = $1
-        ORDER BY t.close_date DESC
-      `, [lastYear]),
     ]);
 
+    const s = selectedStats.rows[0];
+    const ty = thisYearStats.rows[0];
     res.json({
-      lastYear: {
-        year: lastYear,
-        gci: parseFloat(lastYearStats.rows[0].total_gci),
-        volume: parseFloat(lastYearStats.rows[0].total_volume),
-        deals: parseInt(lastYearStats.rows[0].total_deals),
-        avgSalePrice: parseFloat(lastYearStats.rows[0].avg_sale_price),
-        deals_list: lastYearDeals.rows,
+      selectedYear,
+      thisYear,
+      selected: {
+        year: selectedYear,
+        gci: parseFloat(s.total_gci),
+        volume: parseFloat(s.total_volume),
+        net: parseFloat(s.total_net),
+        deals: parseInt(s.total_deals),
+        avgSalePrice: parseFloat(s.avg_sale_price),
+        deals_list: selectedDeals.rows,
       },
-      thisYear: {
+      current: {
         year: thisYear,
-        gci: parseFloat(thisYearStats.rows[0].total_gci),
-        volume: parseFloat(thisYearStats.rows[0].total_volume),
-        deals: parseInt(thisYearStats.rows[0].total_deals),
+        gci: parseFloat(ty.total_gci),
+        volume: parseFloat(ty.total_volume),
+        deals: parseInt(ty.total_deals),
       },
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/dashboard/under-contract-leads
+router.get('/under-contract-leads', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT
+        l.id, l.closing_address, l.closing_date, l.closing_price,
+        l.net_income, l.commission_rate, l.agent_split, l.tax_rate,
+        l.gross_commission,
+        COALESCE(l.net_income,
+          CASE
+            WHEN l.closing_price IS NOT NULL AND l.commission_rate IS NOT NULL
+              AND l.agent_split IS NOT NULL AND l.tax_rate IS NOT NULL
+            THEN l.closing_price * (l.commission_rate/100) * (l.agent_split/100) * (1 - l.tax_rate/100)
+            ELSE NULL
+          END
+        ) AS projected_net,
+        c.first_name, c.last_name
+      FROM leads l
+      JOIN contacts c ON c.id = l.contact_id
+      WHERE l.status = 'under_contract'
+      ORDER BY l.closing_date ASC NULLS LAST
+    `);
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
