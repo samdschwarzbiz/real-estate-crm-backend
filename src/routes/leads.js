@@ -209,6 +209,10 @@ router.patch('/:id', async (req, res) => {
       'relationship_score','tags',
       // Commission fields
       'sale_price','commission_rate','agent_split','tax_rate','gross_commission','agent_gross','tax_amount','net_income',
+      // Transaction deadline fields
+      'earnest_money_date','inspection_deadline','financing_deadline','appraisal_deadline','title_deadline','final_walkthrough_date',
+      // Google Calendar event IDs
+      'earnest_money_gcal_id','inspection_gcal_id','financing_gcal_id','appraisal_gcal_id','title_gcal_id','walkthrough_gcal_id','closing_gcal_id',
     ];
     const updates = Object.keys(fields).filter(k => allowed.includes(k));
     if (!updates.length) return res.status(400).json({ error: 'No valid fields to update' });
@@ -244,6 +248,81 @@ router.delete('/:id', async (req, res) => {
     await db.query('DELETE FROM leads WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/leads/:id/sync-deadlines  — sync all deadlines to Google Calendar
+router.post('/:id/sync-deadlines', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const lead = await db.query(`
+      SELECT l.*, c.first_name, c.last_name
+      FROM leads l
+      LEFT JOIN contacts c ON c.id = l.contact_id
+      WHERE l.id = $1
+    `, [id]);
+
+    if (!lead.rows.length) return res.status(404).json({ error: 'Lead not found' });
+    const row = lead.rows[0];
+
+    const { syncAppointmentToGoogle } = require('../services/google-calendar');
+    const address = row.property_address || row.closing_address || 'Property';
+    const clientName = [row.first_name, row.last_name].filter(Boolean).join(' ') || 'Client';
+
+    const DEADLINES = [
+      { field: 'earnest_money_date',   gcalField: 'earnest_money_gcal_id',  emoji: '💰', label: 'Earnest Money Deposit',        hours: 9 },
+      { field: 'inspection_deadline',  gcalField: 'inspection_gcal_id',     emoji: '🔍', label: 'Inspection Deadline',           hours: 9 },
+      { field: 'financing_deadline',   gcalField: 'financing_gcal_id',      emoji: '🏦', label: 'Financing Contingency Deadline', hours: 9 },
+      { field: 'appraisal_deadline',   gcalField: 'appraisal_gcal_id',      emoji: '📋', label: 'Appraisal Deadline',            hours: 9 },
+      { field: 'title_deadline',       gcalField: 'title_gcal_id',          emoji: '📝', label: 'Title Commitment Deadline',     hours: 9 },
+      { field: 'final_walkthrough_date', gcalField: 'walkthrough_gcal_id',  emoji: '🚪', label: 'Final Walk-Through',            hours: 10 },
+      { field: 'closing_date',         gcalField: 'closing_gcal_id',        emoji: '🎉', label: 'Closing',                      hours: 10 },
+    ];
+
+    const updates = {};
+    let synced = 0;
+
+    for (const d of DEADLINES) {
+      const dateVal = row[d.field];
+      if (!dateVal) continue;
+
+      try {
+        // Build a date at specified hour
+        const dateStr = typeof dateVal === 'string' ? dateVal.slice(0, 10) : dateVal.toISOString().slice(0, 10);
+        const scheduledAt = new Date(`${dateStr}T${String(d.hours).padStart(2,'0')}:00:00`);
+
+        const fakeAppt = {
+          id: null,
+          google_event_id: row[d.gcalField] || null,
+          type: 'closing',
+          title: `${d.emoji} ${d.label}: ${clientName}`,
+          property_address: address,
+          scheduled_at: scheduledAt.toISOString(),
+          duration_min: 60,
+          notes: `Transaction deadline for ${clientName} — ${address}`,
+        };
+
+        const eventId = await syncAppointmentToGoogle(fakeAppt);
+        if (eventId) {
+          updates[d.gcalField] = eventId;
+          synced++;
+        }
+      } catch (gcalErr) {
+        console.log(`Skipped ${d.label} sync:`, gcalErr.message);
+      }
+    }
+
+    // Save gcal IDs back to lead
+    if (Object.keys(updates).length > 0) {
+      const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 2}`).join(', ');
+      const values = [id, ...Object.values(updates)];
+      await db.query(`UPDATE leads SET ${setClauses} WHERE id = $1`, values);
+    }
+
+    res.json({ success: true, synced, updates });
+  } catch (err) {
+    console.error('[sync-deadlines]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
