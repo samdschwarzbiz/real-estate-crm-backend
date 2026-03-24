@@ -90,15 +90,15 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
-// ── Daily reminder cron (8:00 AM Eastern Standard Time = 13:00 UTC) ──
-cron.schedule('0 13 * * *', async () => {
+// ── Daily reminder cron (8:00 AM Eastern, year-round) ──
+cron.schedule('0 8 * * *', async () => {
   console.log('🔔 Running daily reminders...');
   await checkFollowUps();
   await checkBirthdays();
   await checkAnniversaries();
   await checkAppointments();
   await checkUpcomingClosings();
-});
+}, { timezone: 'America/New_York' });
 
 app.listen(PORT, () => {
   console.log(`🏠 Real Estate CRM API running on port ${PORT}`);
