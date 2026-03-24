@@ -295,6 +295,13 @@ router.get('/yearly-stats', async (req, res) => {
           COALESCE(SUM(closing_price), 0) AS total_volume,
           COALESCE(SUM(gross_commission), 0) AS total_gci,
           COALESCE(SUM(net_income), 0) AS total_net,
+          COALESCE(SUM(
+            CASE
+              WHEN gross_commission IS NOT NULL AND agent_split IS NOT NULL AND net_income IS NOT NULL
+              THEN (gross_commission * agent_split / 100) - net_income
+              ELSE 0
+            END
+          ), 0) AS total_taxes,
           COUNT(*) AS total_deals,
           COALESCE(AVG(closing_price), 0) AS avg_sale_price
         FROM leads
@@ -304,6 +311,11 @@ router.get('/yearly-stats', async (req, res) => {
       db.query(`
         SELECT l.id, l.closing_date, l.closing_address, l.closing_price,
                l.gross_commission, l.net_income, l.commission_rate, l.agent_split,
+               CASE
+                 WHEN l.gross_commission IS NOT NULL AND l.agent_split IS NOT NULL AND l.net_income IS NOT NULL
+                 THEN (l.gross_commission * l.agent_split / 100) - l.net_income
+                 ELSE NULL
+               END AS tax_amount,
                c.first_name, c.last_name
         FROM leads l
         JOIN contacts c ON c.id = l.contact_id
@@ -332,6 +344,7 @@ router.get('/yearly-stats', async (req, res) => {
         gci: parseFloat(s.total_gci),
         volume: parseFloat(s.total_volume),
         net: parseFloat(s.total_net),
+        taxes: parseFloat(s.total_taxes),
         deals: parseInt(s.total_deals),
         avgSalePrice: parseFloat(s.avg_sale_price),
         deals_list: selectedDeals.rows,
