@@ -2,7 +2,7 @@ const { Resend } = require('resend');
 const pool = require('../db');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const AGENT_EMAIL = process.env.AGENT_EMAIL || 'samdschwarz@gmail.com';
+const AGENT_EMAIL = process.env.AGENT_EMAIL || 'sam@dolanre.com';
 const FROM_EMAIL = 'onboarding@resend.dev'; // Free tier uses this sender
 
 async function sendReminderEmail({ subject, html }) {
