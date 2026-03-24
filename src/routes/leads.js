@@ -202,7 +202,7 @@ router.patch('/:id', async (req, res) => {
       'status','lead_type','price_min','price_max','beds_min','baths_min','sqft_min',
       'preferred_areas','property_types','timeline','motivation','pre_approved',
       'pre_approval_amount','pre_approval_lender','property_address','property_city',
-      'property_state','property_zip','estimated_value','list_date_target','next_followup_at',
+      'property_state','property_zip','estimated_value','list_date_target','zillow_url','next_followup_at',
       'last_contact_at','assigned_to',
       // Past client fields
       'closing_date','closing_address','closing_price','is_past_client','client_type',
