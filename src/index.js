@@ -90,8 +90,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
-// ── Daily reminder cron (8:00 AM Arizona time = 15:00 UTC) ──
-cron.schedule('0 15 * * *', async () => {
+// ── Daily reminder cron (8:00 AM Eastern Standard Time = 13:00 UTC) ──
+cron.schedule('0 13 * * *', async () => {
   console.log('🔔 Running daily reminders...');
   await checkFollowUps();
   await checkBirthdays();
