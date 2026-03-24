@@ -30,15 +30,15 @@ router.get('/stats', async (req, res) => {
           AND due_date >= NOW() - INTERVAL '1 day'
       `),
       db.query(`
-        SELECT COALESCE(SUM(gci), 0) AS total FROM transactions
-        WHERE status = 'closed'
-          AND close_date >= DATE_TRUNC('month', CURRENT_DATE)
-          AND close_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+        SELECT COALESCE(SUM(net_income), 0) AS total FROM leads
+        WHERE status = 'closed_won'
+          AND closing_date >= DATE_TRUNC('month', CURRENT_DATE)
+          AND closing_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
       `),
       db.query(`
-        SELECT COALESCE(SUM(gci), 0) AS total FROM transactions
-        WHERE status = 'closed'
-          AND close_date >= DATE_TRUNC('year', CURRENT_DATE)
+        SELECT COALESCE(SUM(net_income), 0) AS total FROM leads
+        WHERE status = 'closed_won'
+          AND closing_date >= DATE_TRUNC('year', CURRENT_DATE)
       `),
       db.query(`
         SELECT status, COUNT(*) AS count FROM leads
@@ -54,9 +54,9 @@ router.get('/stats', async (req, res) => {
         END
       `),
       db.query(`
-        SELECT COUNT(*) FROM transactions
-        WHERE status = 'closed'
-          AND close_date >= DATE_TRUNC('month', CURRENT_DATE)
+        SELECT COUNT(*) FROM leads
+        WHERE status = 'closed_won'
+          AND closing_date >= DATE_TRUNC('month', CURRENT_DATE)
       `),
       db.query(`
         SELECT
