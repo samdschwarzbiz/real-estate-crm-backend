@@ -95,4 +95,61 @@ router.get('/birthdays', async (req, res) => {
   }
 });
 
+// GET /api/google/events?days=30  — all events from primary Google Calendar
+router.get('/events', async (req, res) => {
+  try {
+    const { getAuthorizedClient } = require('../services/google-calendar');
+    const auth = await getAuthorizedClient();
+    const { google } = require('googleapis');
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    const days = parseInt(req.query.days) || 30;
+    const now = new Date();
+    const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    // Fetch from all calendars the user owns/subscribes to (skip birthdays & holidays)
+    const calList = await calendar.calendarList.list();
+    const cals = (calList.data.items || []).filter(c => {
+      const s = (c.summary || '').toLowerCase();
+      return !s.includes('holiday') && !s.includes('birthday') && !c.id.includes('holiday');
+    });
+
+    const allEvents = [];
+    await Promise.all(cals.map(async (cal) => {
+      try {
+        const resp = await calendar.events.list({
+          calendarId: cal.id,
+          timeMin: now.toISOString(),
+          timeMax: future.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 50,
+        });
+        for (const e of resp.data.items || []) {
+          if (!e.summary) continue;
+          allEvents.push({
+            id: e.id,
+            title: e.summary,
+            start: e.start.dateTime || e.start.date,
+            end: e.end?.dateTime || e.end?.date,
+            all_day: !!e.start.date,
+            calendar: cal.summary,
+            calendar_color: cal.backgroundColor || null,
+            location: e.location || null,
+            description: e.description || null,
+            source: 'google_calendar',
+          });
+        }
+      } catch { /* skip calendars we can't read */ }
+    }));
+
+    // Sort by start time
+    allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+    res.json(allEvents);
+  } catch (err) {
+    console.error('[google/events]', err.message);
+    res.json([]);
+  }
+});
+
 module.exports = router;
